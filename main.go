@@ -68,21 +68,43 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 // Handler para cadastro
 func register(w http.ResponseWriter, r *http.Request) {
+	// Verificar se o método da solicitação é POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Verificar se o Content-Type é application/json
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	// Decodificar o novo usuário do corpo da solicitação
 	var newUser Usuario
 	err := json.NewDecoder(r.Body).Decode(&newUser)
 	if err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
+		return
+	}
+
+	// Verificar se os campos obrigatórios estão presentes e preenchidos
+	if newUser.Username == "" || newUser.Email == "" || newUser.Password == "" {
+		http.Error(w, "Username, email, and password are required", http.StatusBadRequest)
 		return
 	}
 
 	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Verificar se o usuário já existe
 	if _, exists := users[newUser.Username]; exists {
-		mutex.Unlock()
 		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
+
+	// Adicionar o novo usuário ao banco de dados simulado
 	users[newUser.Username] = newUser
-	mutex.Unlock()
 
 	w.WriteHeader(http.StatusCreated)
 }
