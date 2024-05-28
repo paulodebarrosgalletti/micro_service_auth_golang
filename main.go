@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -25,10 +26,31 @@ type Claims struct {
 }
 
 var jwtKey = []byte("my_secret_key")
-
-// Simulação de um banco de dados em memória
 var users = make(map[string]Usuario)
 var mutex sync.Mutex
+
+const usersFile = "users.json"
+
+// Função para carregar os dados de usuários do arquivo JSON
+func loadUsers() error {
+	file, err := ioutil.ReadFile(usersFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // Arquivo não existe, nenhum usuário para carregar
+		}
+		return err
+	}
+	return json.Unmarshal(file, &users)
+}
+
+// Função para salvar os dados de usuários no arquivo JSON
+func saveUsers() error {
+	file, err := json.MarshalIndent(users, "", "  ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(usersFile, file, 0644)
+}
 
 // Handler para login
 func login(w http.ResponseWriter, r *http.Request) {
@@ -68,19 +90,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 // Handler para cadastro
 func register(w http.ResponseWriter, r *http.Request) {
-	// Verificar se o método da solicitação é POST
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Verificar se o Content-Type é application/json
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
 		return
 	}
 
-	// Decodificar o novo usuário do corpo da solicitação
 	var newUser Usuario
 	err := json.NewDecoder(r.Body).Decode(&newUser)
 	if err != nil {
@@ -88,7 +107,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar se os campos obrigatórios estão presentes e preenchidos
 	if newUser.Username == "" || newUser.Email == "" || newUser.Password == "" {
 		http.Error(w, "Username, email, and password are required", http.StatusBadRequest)
 		return
@@ -97,14 +115,17 @@ func register(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	// Verificar se o usuário já existe
 	if _, exists := users[newUser.Username]; exists {
 		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
 
-	// Adicionar o novo usuário ao banco de dados simulado
 	users[newUser.Username] = newUser
+
+	if err := saveUsers(); err != nil {
+		http.Error(w, "Failed to save user", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -115,17 +136,35 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+// Middleware para permitir CORS
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Função principal
 func main() {
-	http.HandleFunc("/login", login)
-	http.HandleFunc("/register", register)
-	http.HandleFunc("/health", healthCheck)
+	if err := loadUsers(); err != nil {
+		log.Fatalf("Failed to load users: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login", login)
+	mux.HandleFunc("/register", register)
+	mux.HandleFunc("/health", healthCheck)
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "5000"
+		port = "8081"
 	}
 
 	log.Printf("Listening on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(mux)))
 }

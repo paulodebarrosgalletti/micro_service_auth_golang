@@ -1,1 +1,17 @@
-[{"nome":"","idade":0,"telefone":""},{"nome":"","idade":0,"telefone":""},{"nome":"","idade":0,"telefone":""},{"nome":"João","idade":30,"telefone":"(XX) XXXX-XXXX"},{"nome":"Cristhian","idade":22,"telefone":"(11) 4002-8922"},{"nome":"natalia","idade":22,"telefone":"(11) 4002-8922"}]
+{
+  "paulo": {
+    "username": "paulo",
+    "email": "paulo@gmail.com",
+    "password": "123"
+  },
+  "user1": {
+    "username": "user1",
+    "email": "user1@example.com",
+    "password": "password1"
+  },
+  "user2": {
+    "username": "user2",
+    "email": "user2@example.com",
+    "password": "password2"
+  }
+}
